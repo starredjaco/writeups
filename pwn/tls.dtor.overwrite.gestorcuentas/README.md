@@ -146,9 +146,9 @@ struct dtor_list
 
 - Looking at the disassembly we now know that we have to use our write primitive to write a pointer to our function in whatever address is at rbx, and its first argument at rbx+0x8
 
-![alt text](resources/gestor-cuentas/dtor1.png)
+![alt text](images/dtor1.png)
 
-![alt text](resources/gestor-cuentas/tls.png)
+![alt text](images/tls.png)
 
 - The address to write to is tls+0x6e8, so recalling:
   1. Takes the pointer stored at ``tls+0x8``
@@ -157,7 +157,7 @@ struct dtor_list
   4. Calls the result
 
 - We can find the cookie used to XOR the address at `pointer_guard` -> offset ``tls+0x740+0x30``
-![alt text](resources/gestor-cuentas/tls.png) 
+![alt text](images/tls.png) 
 
 - Our next step is to leak base TLS address. In the original post, the author adds 0x1ff898 to the libc address to leak an ld.so address close to the TLS, this approach did not work in my libc version (glibc 2.35). I spent good time looking around and I found [this](https://blog.rop.la/en/exploiting/2024/06/11/code-exec-part1-from-exit-to-system.html) post: 
 
@@ -197,7 +197,7 @@ pwndbg> x/gx 0x71768288a000+0x6e8
 pwndbg> x/2gx 0x00000000004041b0
 0x4041b0 <accounts+336>:	0xe2ed04ca1ae00000	0x41417176827d8678
 ```
-![system](resources/gestor-cuentas/system.png)
+![system](images/system.png)
 
 ### Getting the flag
 After executing our script we achieve code execution.
@@ -250,6 +250,6 @@ uid=1000(lokete) gid=1000(lokete) groups=1000(lokete)
 ```
 
 ### Full scripts:
-  - Custom `dtor_list` inside TLS Storage: [tls_into_tls.py](resources/gestor-cuentas/tls_into_tls.py)
-  - Custom `dtor_list` inside `accounts` array: [tls_into_acc.py](resources/gestor-cuentas/tls_into_acc.py)
-  - Intended solution with env leak: [env.py](resources/gestor-cuentas/env.py)
+  - Custom `dtor_list` inside TLS Storage: [tls_into_tls.py](images/tls_into_tls.py)
+  - Custom `dtor_list` inside `accounts` array: [tls_into_acc.py](images/tls_into_acc.py)
+  - Intended solution with env leak: [env.py](images/env.py)
