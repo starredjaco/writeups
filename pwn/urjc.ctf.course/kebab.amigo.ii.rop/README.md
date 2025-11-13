@@ -14,7 +14,7 @@ In this challenge we have to abuse wrong `scanf` formatting to overwrite the mai
 
 ## Challenge Solution
 
----
+
 
 As always, we start by checking the file’s security measures with ``checksec`` and ``file``
 
@@ -181,8 +181,6 @@ void banhos_turcos(){
 We have a huge buffer overflow in this function.
 
 ## Exploitation Stages
-
----
 
 ### Overwrite destroy function
 
