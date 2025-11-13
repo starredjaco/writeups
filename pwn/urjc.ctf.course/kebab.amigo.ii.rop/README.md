@@ -238,7 +238,7 @@ def setup_bof():
     print("[*] Done! Send your ROP payload after the prompt! \n")
 ```
 
-![Untitled](images/Untitled.png)
+![Untitled](assets/Untitled.png)
 
 ### Ret2libc
 
@@ -291,7 +291,7 @@ def leak():
 
 After leaking the address of ``read`` at libc. We can do `read_leak - libc.sym.read` (this contains the offset of `read` inside the library) to get the libc base address. And after checking inside a website like [libc.rip](http://libc.rip) or [libc.blukat.me](http://libc.blukat.me) we can retrieve the libc version. And download it.
 
-![Untitled](images/Untitled%201.png)
+![Untitled](assets/Untitled%201.png)
 
 Now we just have to craft our last payload to get our shell. The final payload will be: `PADDING + POP_RDI + <address of "/bin/sh" string> + <address of libc.system>` 
 
@@ -315,8 +315,8 @@ def shell():
 
 After sending this last payload we have a shell and we can read the flag.
 
-![Untitled](images/Untitled%202.png)
+![Untitled](assets/Untitled%202.png)
 
-You can find the full exploit [here](solvers/exploit.py)
+You can find the full exploit [here](assets/exploit.py)
 
 **SOLVED - flag{c0m0_entra_un_kebab_enc1ma_kebab_chaval}**

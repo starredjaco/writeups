@@ -361,4 +361,4 @@ Spell: $ id
 uid=0(root) gid=0(root) groups=0(root)
 ```
 
-You can download the full script [here](solvers/solver.py)
+You can download the full script [here](assets/solver.py)
