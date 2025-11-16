@@ -347,7 +347,6 @@ tcachebins
 
 - As we can see the address is correctly modified, so if we allocate two 0x80 chunks, the second one will end up inside our return address. With this primitive we can do a lot of things, in this case we write a standard ROP chain to call `system("/bin/sh")`.
 
-
 ### Getting the flag
 After executing our script we achieve code execution.
 
@@ -361,4 +360,4 @@ Spell: $ id
 uid=0(root) gid=0(root) groups=0(root)
 ```
 
-You can download the full script [here](assets/solver.py)
+You can download the full script [here](assets/solver.py) or the solver with [TLS Storage](pwn\urjc.ctf.course\tls.dtor.overwrite.gestorcuentas) Overwrite approach [here](assets/solver_tls.py)
