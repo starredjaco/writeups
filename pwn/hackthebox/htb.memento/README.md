@@ -1,12 +1,12 @@
 
 # Magic Scrolls - HTB Heap Challenge
 
-
 - In progress...
 
 ## TL;DR
 
 - off by one to overwrite size field of input struct, partial overwrite (1 byte) buffer address with return address to create a ropchain
+
 ## Challenge Description
 
 > Storing data to retrieve it later. An infinite loop - can you escape?

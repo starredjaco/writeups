@@ -1,0 +1,8 @@
+Cowsay is so out... Old & boring. Which is why I made wowsay!
+
+leakear binario con format string  (nopie) y sobreescribir got
+
+[+] 0x4011c0 => b'\xf3\x0f\x1e\xfa\xeb\x8aUH\x89\xe5H\x83\xec\x10H\x8d\x053\x0e' < UH -> win 
+[+] 23 => b'0x401352' < main func
+
+
