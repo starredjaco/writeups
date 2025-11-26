@@ -3,7 +3,7 @@
 
 ## TL;DR
 
-- The only think we are given is the challenge description, and a remote server to connect to.
+- The only thing we are given is the challenge description, and a remote server to connect to.
 - Format string your way into finding out ``win()`` function and GOT table addresses, and overwrite one of the entries to print the flag.
 
 ## Challenge Description
