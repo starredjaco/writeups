@@ -106,9 +106,9 @@ def arb_write():
 ```
 
 Payload:
-- `%4550c%8%hn`: 
-        - `%4550c`: This part will print 4550 characters (spaces) to stdout.
-        - `%8$hn`: Write the number of bytes we have printed until now into the address at 8th position. `%n` writes 4 bytes, `%hn` writes 2 bytes and `%hhn` writes 1 byte.
+- `%4550c%8%hn`:
+  * `%4550c`: This part will print 4550 characters (spaces) to stdout.
+  * `%8$hn`: Write the number of bytes we have printed until now into the address at 8th position. `%n` writes 4 bytes, `%hn` writes 2 bytes and `%hhn` writes 1 byte.
 - Padding of 16 bytes to make sure the payload works using 8th position.
 - The address where we want to write.
 
