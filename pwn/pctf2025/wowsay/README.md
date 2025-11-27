@@ -116,7 +116,10 @@ After trying all of them the first one that worked was ``0x404048``, which is pr
 
 ![flag](assets/flag.gif)
 
-Solvers:
+### Flag
+CACI{w0ws4y_b3tt3r_th4n_c0ws4y_1_pr0m1s3}
+
+### Solvers
 - [leak_got.py](assets/leak_got.py)
 - [leak_stack.py](assets/leak_stack.py)
 - [leak_win.py](assets/leak_win.py)
