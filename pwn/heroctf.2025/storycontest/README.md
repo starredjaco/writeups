@@ -90,3 +90,5 @@ void submit_story(int fd){
 - The script takes more than one try to work, but always ends up printing the flag (crashing the instance too)
 
 ![flag](assets/flag.gif)
+
+You can find the full script [here](assets/solver.py)
