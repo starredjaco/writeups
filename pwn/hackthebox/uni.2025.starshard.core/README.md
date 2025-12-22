@@ -203,5 +203,45 @@ struct _IO_wide_data {
 
 ### Exploiting the vulnerability
 
+- Now that we (kind of) know what path to take to solve the challenge, we need libc, heap and PIE leaks. This last one is needed because there is an additional function I did not mention before: `ginger_gate` that gives us a shell. The method we will use works perfectly with no PIE leaks to pop a `/bin/sh` shell too, but considering they gave us the win function we will use it.
+
+- Remember that at the start we were asked for a name? This is the code that implements it:
+
+```c
+...
+  printf("Tinselwick Tinkerer Name: ");
+  fgets(console_state.tinkerer_name,0x10,stdin);
+  printf("=== Welcome ");
+  printf(console_state.tinkerer_name);
+...
+```
+
+- Format string vulnerability in `console_state.tinkerer_name`.
+
+```console
+          ____
+       .-" +' "-.
+      /.'.'A_'*`.\
+     |:.*'/\\-\.':|
+     |:.'.||"|.'*:|
+      \:~^~^~^~^:/
+       /`-....-'\
+      /          \
+      `-.,____,.-'
+
+Tinselwick Tinkerer Name: %p.%p.%p
+=== Welcome 0x7ffd25886ce0.0xffffffff.(nil) — Starshard Console ===
+
+[1] Arm Starshard Routine
+[2] Attach Wish-Script Fragment
+[3] Cancel Routine
+[4] Commit Routine
+[5] Quit
+> 
+```
+
+- Using this we can achieve leaks for libc and PIE, examining the stack and calculating offsets.
+
+- For PIE leak we can take a look the `arm_routine` function, 
 
 ### Getting the flag
