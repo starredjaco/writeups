@@ -279,9 +279,9 @@ typedef struct {
 
 - We will use the call chain described in [House of Apple 2](https://roderickchan.github.io/zh-cn/house-of-apple-%E4%B8%80%E7%A7%8D%E6%96%B0%E7%9A%84glibc%E4%B8%ADio%E6%94%BB%E5%87%BB%E6%96%B9%E6%B3%95-2/): ``_IO_wfile_overflow -> _IO_wdoallocbuf -> _IO_WDOALLOCATE -> *(fp->_wide_data->_wide_vtable + 0x68)(fp)``
 
-- Don't let this overwhelm you it is not as hard as it looks. We will trick our FILE vtable (the one with the validity checks) to point to the ``_IO_wide_data`` vtable, tweaking its address so when it tries to execute ``_finish`` instead calls ``_IO_wfile_overflow``, this function internally will call `_IO_wdoallocbuf`. This function will make use of the no validity checks `_wide_data` vtable to search for `_IO_WDOALLOCATE` (offset 0x68). So what we have to do is place in a controllable address `addr` our `ginger_gate` function, and overwrite the vtable pointer of `_wide_data` to `addr-0x68`, so when `_IO_wdoallocbuf` tries to execute `_IO_WDOALLOCATE` instead calls `ginger_gate` and gives us a shell. 
+- Don't let this overwhelm you, it is not as hard as it looks. We will trick our FILE vtable (the one with the validity checks) to point to the ``_IO_wide_data`` vtable, tweaking its address so when it tries to execute ``_finish`` instead calls ``_IO_wfile_overflow``, this function internally will call `_IO_wdoallocbuf`. This function will make use of the no validity checks `_wide_data` vtable to search for `_IO_WDOALLOCATE` (offset 0x68). So what we have to do is place in a controllable address `addr` our `ginger_gate` function, and overwrite the vtable pointer of `_wide_data` to `addr-0x68`, so when `_IO_wdoallocbuf` tries to execute `_IO_WDOALLOCATE` instead calls `ginger_gate` and gives us a shell. 
 
-- There are specific constraints we have to we aware of: 
+- There are specific constraints we have to be aware of: 
     * `fp->_wide_data->_IO_buf_base != 0`
     * `f->_wide_data->_IO_write_base == 0`
     * `f->_flags == 0` 
