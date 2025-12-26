@@ -99,12 +99,12 @@ static ssize_t add(struct switch_device* dev){
 ### Achieve LPE from the powerful primitive
 
 - The final path for the exploitation is:
-    1. Double free the object 0
-    2. Write into its next pointer the address of `modprobe_path`
-    3. Free once the object 1, our free list now is `modprobe_path` <- `node0` <- `node1`.
-    4. Create a new object to allocate node1, and node2
-    5. Call the write handler to allocate and write into `modprobe_path`
-    6. Create the shell script, and the dummy file, execute it and read the flag.
+    - Double free the object 0
+    - Write into its next pointer the address of `modprobe_path`
+    - Free once the object 1, our free list now is `modprobe_path` <- `node0` <- `node1`.
+    - Create a new object to allocate node1, and node2
+    - Call the write handler to allocate and write into `modprobe_path`
+    - Create the shell script, and the dummy file, execute it and read the flag.
 
 - I added some `usleep` calls in the exploit because it was not consistently getting the flag, I thought it was because of timing issues.
 
