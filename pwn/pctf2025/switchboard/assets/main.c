@@ -121,8 +121,8 @@ int main(int argc, char** argv){
 
     dev_free(node0);
     dev_select(node1);
-    dev_free(node1);
-    dev_free(node1);
+    dev_free(node1); // set inuse = 0
+    dev_free(node1); // free once to place it in the top of the freelist
 
     usleep(15000);
 
