@@ -11,3 +11,12 @@
 
 ## Exploitation
 ### Analyzing the source code
+
+
+### Getting the flag
+
+![flag](assets/flag.gif)
+
+### Solvers
+
+You can find the solver [here](assets/main.c).
