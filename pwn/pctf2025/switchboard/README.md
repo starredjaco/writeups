@@ -34,7 +34,7 @@ struct switch_device {
     * ``n_set``: Sets the maximum data length for the selected device's buffer, stored in ``dev->len``.
     * ``settings``: Configures transmission settings for the selected device. The t_settings field uses bit 0 to control retransmission behavior in tx_handle.
 
-- There are two major issues in the module, after freeing a specific node reseting its buffer with `buf_reset`, the pointer is not cleared, leading to a use-after-free vulnerability. This is critical considering that there are no modern protections such as `CONFIG_SLAB_FREELIST_HARDENED`, that prevent the tampering of slab freelists. The other problem is at `buf_reset`, where after freeing a node we set ``dev->freed = 1``, but there are no checks that use this field so we can infinitely free a chunk.
+- There are two major issues in the module, after freeing a specific node reseting its buffer with `buf_reset`, the pointer is not cleared, leading to a use-after-free vulnerability. This is critical considering that there are no modern protections such as `CONFIG_SLAB_FREELIST_HARDENED`, that prevent the tampering of slab freelists. Added to this, the r/w handlers do not check if the object is freed. The other problem is at `buf_reset`, where after freeing a node we set ``dev->freed = 1``, but there are no checks that use this field so we can infinitely free a chunk.
 
 ```c
 
@@ -70,10 +70,43 @@ struct seq_operations {
 ```
 
 - Knowing this we can follow the next approach to leak kernel pointers:
-    * 1. Double free a device object
-    * 2. Allocate a device (we do this first because it is using ``kzalloc`` to zero out previous content)
-    * 3. Because it is freed again, we can place `seq_operations` inside by calling ``open("/proc/self/stat")``
-    * 4. Read from the device to get leaks
+    1. Double free a device object
+    2. Allocate a device (we do this first because it is using ``kzalloc`` to zero out previous content)
+    3. Because it is freed again, we can place `seq_operations` inside by calling ``open("/proc/self/stat")``
+    4. Read from the device to get leaks
+
+- After getting leaks we can just free twice again an object and write over its next pointer to allocate wherever we want right? There is a problem, when creating an object we allocate **twice** in kmalloc-cg-32, this is because in the `obj_new` function we allocate once for ``dev->buf`` (the one we are interested in), and it calls `add()` to add the created device to the linked list. This last function allocates a ``struct devices`` object that is an entry in the linked list, so it has 3 pointers (24 bytes), and gets allocated in the same cache.
+
+```c
+
+typedef struct devices {
+    struct switch_device* device;
+    struct devices* next, *prev;
+} devices;
+
+static ssize_t add(struct switch_device* dev){
+    devices * node = head;
+    devices * newdev = kzalloc(sizeof(devices), GFP_KERNEL_ACCOUNT);
+    ...
+}
+
+```
+
+- For this reason, we will create an additional object on index 1 before leaking, and we will free it after tampering the free list, to place it on top of the list.
+
+- One way of achieving root execution with an arbitrary write primitive in the kernel, is overwriting the `modprobe_path` global variable. It usually contains a string `/sbin/modprobe`, that is a binary that gets executed whenever the kernel does not recognize the magic bytes of a file. If we overwrite this string with a custom shell script, and try to execute an unknown file (for example, one that starts with 4 0xff bytes), our shell script will get executed as root.
+
+### Achieve LPE from the powerful primitive
+
+- The final path for the exploitation is:
+    1. Double free the object 0
+    2. Write into its next pointer the address of `modprobe_path`
+    3. Free once the object 1, our free list now is `modprobe_path` <- `node0` <- `node1`.
+    4. Create a new object to allocate node1, and node2
+    5. Call the write handler to allocate and write into `modprobe_path`
+    6. Create the shell script, and the dummy file, execute it and read the flag.
+
+- I added some `usleep` calls in the exploit because it was not consistently getting the flag, I thought it was because of timing issues.
 
 ### Getting the flag
 
