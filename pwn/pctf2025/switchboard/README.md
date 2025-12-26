@@ -58,7 +58,7 @@ static long buf_reset(unsigned long arg){
 
 - With this information we know that we can achieve a write-what-where primitive in the kernel, but to achieve root in the VM we need to leak kernel base address. To do this we are going to take advantage of `seq_operations` object.
 - We know that the allocation that is happening in the module is of size `BUF_SIZE`: `dev->buf = kzalloc(BUF_SIZE, GFP_KERNEL_ACCOUNT)`, so we know the object ends getting placed in a ``kmalloc-cg-32`` slab. In the linux kernel, caches are shared across the system, so we can abuse this fact by allocating an object that we know that contains kernel pointers and read them using our kUAF to leak kernel addresses. 
-- The `seq_operations` object is placed inside kmalloc-cg-32 when opening the file `/proc/self/stat` and it is freed when closed. This object is often used to achieve RIP control by overwriting one of its pointers with an arbitrary address, but in our case we will only leak kernel base using the first pointer in the structure. More info [here](https://ptr-yudai.hatenablog.com/entry/2020/03/16/165628#seq_operations).
+- The `seq_operations` object is placed inside ``kmalloc-cg-32`` when opening the file `/proc/self/stat` and it is freed when closed. This object is often used to achieve RIP control by overwriting one of its pointers with an arbitrary address, but in our case we will only leak kernel base using the first pointer in the structure. More info [here](https://ptr-yudai.hatenablog.com/entry/2020/03/16/165628#seq_operations).
 
 ```c
 struct seq_operations {
