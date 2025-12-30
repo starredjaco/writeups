@@ -199,7 +199,7 @@ r.interactive()
 - As we stated earlier, all the pages have RWX permissions so a teammate developed a different approach involving writing 0 null bytes into a specific offset of the `sys_setuid` implementation. There is a specific `CMP word ptr [EAX + 0x2124],0x0` instruction in the code, that checks if the user who called the function has gid = 0.
 
 ```c
-  if (current.gid == 0) { // <-- This is the check
+  if (current.gid == 0) { /* <-- This is the check */
     current.euid = param_1;
     current.uid = param_1;
   }
@@ -227,7 +227,7 @@ r.interactive()
 #include <stdlib.h>
 
 #define TIOCINQ 0x541b
-#define ADDR 0xc010e5cc // 0x5cc for first approach, 0x5ce for second
+#define ADDR 0xc010e5cc /* 0x5cc for first approach, 0x5ce for second */
 
 int main() {
 
