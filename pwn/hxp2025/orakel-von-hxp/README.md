@@ -359,14 +359,14 @@ end:
     ldr r3, =0x0
     ldr r5, =0x7d
 start:
-    movw r4, 0xffff
-    movt r4, 0x00ff
+    movw r4, 0xffff 
+    movt r4, 0x00ff             @ set r4 to 0x00ffffff
 delay:
-    subs r4, 1
+    subs r4, 1                  @ substract r4-1 until it reaches 0
     cmp r4, r3
     bne delay
 loop:
-    ldr r0, =0x4000D000  
+    ldr r0, =0x4000D000         @ read from UART1
     ldr r1, [r0]    
     tst r1, #0xFF        
     beq start    
@@ -378,8 +378,6 @@ loop:
     b start
 end:  
 ```
-
-- This worked flawlessly
 
 ### Getting the flag
 

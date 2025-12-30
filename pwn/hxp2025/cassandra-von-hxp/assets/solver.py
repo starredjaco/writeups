@@ -46,9 +46,6 @@ def pow_solve():
 if rem:
 	pow_solve()
 
-# modificar el bit de 0x4000d030 que activa o desactiva el registro uart1 poniendolo a 0x301
-# poner context: . en el compose, quitar el shuffle descargar el bin quitar el pow poner el -s en el start.py
-
 code = asm("""
 		ldr r6, =0x301
 		ldr r3, =0x0
