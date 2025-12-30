@@ -393,7 +393,8 @@ end:
 
 ### Intended approach
 
-- Mine was **not** the intended path for this challenge. According to the author: 
+- Mine was **not** the intended path for this challenge. According to the author:
+  
 ![alt text](assets/unintended.png)
 
 - Turns out QEMU does not implement MPU in the Cortex-M layer, so shellcoding is always available for this challenge. In fact, this is the method I used to solve the part 2 of this challenge [cassandra-von-hxp](https://github.com/Iokete/writeups/tree/main/pwn/hxp2025/cassandra-von-hxp). 
