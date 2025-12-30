@@ -13,7 +13,7 @@
 
 ### Finding the vulnerability
 
-- When analyzing the provided challenge files we can not locate an specific binary or kernel module to exploit. But in `run.sh` we can see it uses the file `fiwix` as a kernel, and it is getting set up by the `build-challenge.sh` script, that downloads the last version of FiwixOS from the official website **https://www.fiwix.org/FiwixOS-3.5-i386.raw.gz**. 
+- When analyzing the provided challenge files we cannot locate a specific binary or kernel module to exploit. But in `run.sh` we can see it uses the file `fiwix` as a kernel, and it is being set up by the `build-challenge.sh` script, that downloads the latest version of FiwixOS from the official website **https://www.fiwix.org/FiwixOS-3.5-i386.raw.gz**. 
 
 > Fiwix is an operating system kernel written from scratch, based on the UNIX architecture and fully focused on being Linux-i386 compatible (Linux 2.0 and 2.2 versions mostly). It is designed and developed mainly as a hobby OS and, since it serves also for educational purposes, the kernel code is kept as simple as possible for the benefit of students and OS enthusiasts. It is small in size (less than 50K lines of code), runs only on the i386 hardware platform and is compatible with a good base of existing GNU applications
 
@@ -21,9 +21,9 @@
 > WARNING: the kernel and the software included might contain (un)known bugs and vulnerabilities.
 USE AT YOUR OWN RISK!
 
-- So the first thing we do is look at the [changelog page](https://www.fiwix.org/news.html) to search for any known unfixed bugs. For the last version 1.7.0, there were a lot of additions but we can highlight **- Added support for the command TIOCINQ in tty_ioctl().** Since the code is open we can read the new implementation by downloading the official [source code](https://www.fiwix.org/fiwix-1.7.0.tar.bz2).
+- So the first thing we do is check the [changelog page](https://www.fiwix.org/news.html) for any known unfixed bugs. For the latest version 1.7.0, there were a lot of additions but we can highlight **- Added support for the command TIOCINQ in tty_ioctl().** Since the code is open we can read the new implementation by downloading the official [source code](https://www.fiwix.org/fiwix-1.7.0.tar.bz2).
 
-- At the file ``tty.c`` we find the TIOCINQ (0x541b) implementation inside the `tty_ioctl` function
+- In the file ``tty.c`` we find the TIOCINQ (0x541b) implementation inside the `tty_ioctl` function
 
 ```c
 case TIOCINQ:
@@ -50,9 +50,9 @@ int check_user_area(int type, const void *addr, unsigned int size)
 
 ```
 
-- As we can see it is not verying the address is valid in TIOCINQ, so whatever value gets sent via `arg` will be the address where `read_q.count` or `cooked_q.count` will be written. `read_q` stores raw bytes from a `read` syscall, including keyboard interrupts, and `cooked_q` contains the processed input. 
+- As we can see it is not verifying if the address is valid in TIOCINQ, so whatever value gets sent via `arg` will be the address where `read_q.count` or `cooked_q.count` will be written. `read_q` stores raw bytes from a `read` syscall, including keyboard interrupts, and `cooked_q` contains the processed input. 
 
-- Knowing this we can try to execute `ioctl` into an open tty to try and write an unknown value to an address of our choice. We will compile this small .c code to test it:
+- Knowing this we can try to perform an `ioctl` on an open tty to try and write an unknown value to an address of our choice. We will compile this small .c code to test it:
 
 ```c
 #define TIOCINQ 0x541b
@@ -77,7 +77,7 @@ int32_t main(int argc, char **argv){
 
 ![alt text](assets/gdb.png)
 
-- It is trying to write 0 to the address 0xdeadbeef! So now we know the value getting written. This could have been told by looking at the code and understanding that the function writes the number of bytes inside the data queue, but I always prefer to debug it just in case there where bytes inside.
+- It is trying to write 0 to the address 0xdeadbeef! So now we know the value getting written. This could have been told by looking at the code and understanding that the function writes the number of bytes inside the data queue, but I always prefer to debug it just in case there were bytes inside.
 
 ### Exploiting the vulnerability
 
@@ -214,9 +214,9 @@ r.interactive()
 7:  00                      .byte 0x0
 ```
 
-- Another approach we found that involved patching the kernel was instead of zeroing out after the byte `66`, we would zero out from `b8` so the instruction instead of being `CMP word ptr [EAX + 0x2124],0x0` would do the comparation with `CMP word ptr [EAX],0x0`. Remember EAX here is always `current` and looking at GDB it would always point to NULL data at its first field.
+- Another approach we found that involved patching the kernel was instead of zeroing out after the byte `66`, we would zero out from `b8` so the instruction instead of being `CMP word ptr [EAX + 0x2124],0x0` would do the comparison with `CMP word ptr [EAX],0x0`. Remember EAX here is always `current` and looking at GDB it would always point to NULL data at its first field.
 
-- This approaches worked consistently to achieve LPE on the remote instance.
+- These approaches worked consistently to achieve LPE on the remote instance.
 
 ```c
 
