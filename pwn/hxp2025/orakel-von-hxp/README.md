@@ -1,11 +1,11 @@
-# orakel-von-xp
+# orakel-von-hxp
 
 ## TL; DR
 - Stack buffer overflow in LM3S6965EVB board (ARM Cortex-M3), shellcode to read from UART1
 
 ## Challenge Description
 
-> AI took my job and now I feel lost. Good thing I have an oracle to ask what to do, altough I can’t make sense of what it says. Hint: The flag is continously input on UART1.
+> AI took my job and now I feel lost. Good thing I have an oracle to ask what to do, although I can’t make sense of what it says. Hint: The flag is continously input on UART1.
 
 - Category: **pwn**
 
@@ -215,7 +215,7 @@ if __name__ == "__main__":
     solve_for_seed(target)
 ```
 
-- After some trial an error the script finally worked and generated the seed `0x7ffde650`.
+- After some trial and error the script finally worked and generated the seed `0x7ffde650`.
 
 - To start debugging the challenge, I had to set up a few things. First, I commented out a line in `start.py` to disable the function address randomization, this would let me place breakpoints in the correct addresses every time without needing to leak anything. Add `-s` in the qemu parameters to enable a gdbserver remote instance. Fix some other parameters in the docker-compose.yml and remove the proof-of-work checker from my local instance. After starting the docker, we could grab the firmware binary with `docker cp`.
 
