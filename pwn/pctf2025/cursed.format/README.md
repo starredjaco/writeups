@@ -135,4 +135,4 @@ return_address+0x18+4: (system & 0xffff00000000) >> 32
 pctf{im_sorry_i_made_you_do_that_lol}
 
 ### Solvers
-- You can download the solver script [here](assets/local.py). It is overwhelmingly dirty, I would not look there :).
+- You can download the solver script [here](assets/local.py). It is really dirty, please don't look at it.
