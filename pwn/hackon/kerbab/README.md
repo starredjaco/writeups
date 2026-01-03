@@ -12,8 +12,7 @@ This challenge was part of HackOn 2024 CTF
 We are given a list of files common in kernel exploitation challenges
 
 ```console
-
-lkt@pwn:~/Desktop/ctf/kerbab/zip$ ls -l
+lkt@pwn:~/Desktop/ctf/kerbab$ ls -l
 total 12240
 -rw-rw-r-- 1 lkt lkt       59 ene  3 11:48 deploy_docker.sh
 -rw-rw-r-- 1 lkt lkt      155 ene  3 11:48 docker-compose.yml
@@ -24,7 +23,4 @@ drwxrwxr-x 7 lkt lkt     4096 ene  3 11:48 pc-bios
 -rw-rw-r-- 1 lkt lkt      396 ene  3 11:48 run.sh
 -rw-rw-r-- 1 lkt lkt 10000704 ene  3 11:48 vmlinuz-4.19.306
 -rw-rw-r-- 1 lkt lkt      176 ene  3 11:48 xinetd
-
-
-
 ```
