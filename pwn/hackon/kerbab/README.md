@@ -25,7 +25,11 @@ drwxrwxr-x 7 lkt lkt     4096 ene  3 11:48 pc-bios
 -rw-rw-r-- 1 lkt lkt      176 ene  3 11:48 xinetd
 ```
 
-The most relevant files are initramfs.cpio.gz, which holds the filesystem of the VM we are going to spawn to exploit the vulnerable kernel module. The `vmlinuz-4.19.306` is the kernel image of the VM. We can see how it is spawned in the `run.sh` file:
+The most relevant files are:
+- ``initramfs.cpio.gz``: holds the filesystem of the VM.
+- `vmlinuz-4.19.306` is the kernel image of the VM. 
+- `run.sh`: bash script to spawn the VM with qemu.
+- `kebab.c`: source code of the vulnerable driver.
 
 ```bash
 #!/bin/bash
@@ -144,6 +148,8 @@ void exploit(int devfd){
 		printf("[*] Opened device\n");
 	} else { exit(1); }
 
+}
+
 ```
 
 Modify `run.sh` to compile it as a library:
@@ -179,3 +185,50 @@ Bad system call
 
 ### Analyzing the source code
 
+The driver works as a safe storage, we can send data and it will get RC4 encrypted and stored in chunks in the kernel heap. It uses the following structures:
+
+```c
+
+struct secure_buffer {
+	char *buffer;
+	size_t size;
+};
+
+struct new_secbuff_arg {
+	size_t size;
+	char key[MAX_RC4_LEN];
+	const char *buffer;
+};
+
+struct read_secbuff_arg {
+	unsigned long index;
+	char key[MAX_RC4_LEN];
+	char *buffer;
+};
+
+struct key_info{
+	int pid;
+	struct task_struct *cur;
+	size_t max_len;
+};
+```
+
+- `struct secure_buffer`: it is stored in the kernel heap too (kmalloc-16), and saves the pointer to the encrypted user data, and its size.
+- `struct new_secbuff_arg`: structure used to send data to the kernel device, the `size` of the data, RC4 `key` and the buffer with the not yet encrypted data.
+- `struct read_secbuff_arg`: structure used to read data from the kernel, we don't use this in our exploit. It is the same as `new_secbuff_arg` but with an `index` field. It looks for that index in the global list and fills our buffer with its `secure_buffer.size` value.
+- `struct key_info`: this is one of the main bugs in this module. The `key_info` structure holds a pointer to the current `task_struct`, this struct has all the relevant information about the current process (including SECCOMP flags, UID, GID, etc.). 
+- Other RC4 encryption structures...
+
+We can interact with the driver using the `ioctl` syscall. With the syntax `ioctl(fd, PARAMETER, arg)`, ``arg`` will be a pointer to one of the structs described above and depending of `PARAMETER` it will do one of the following:
+
+- `KEBAB_IOCTL_NEW`: Creates a total of 3 allocations; the first will be `secure_buffer` to hold the pointer and the size, the second will be an allocation of n bytes provided by the user, it gets stored in `secure_buffer.buffer`. And the last one is an intermediate big allocation of size 2048 to hold the unencrypted user data before encrypting it. This is the buffer the RC4 functions will use to access to the original bytes.
+- `KEBAB_IOCTL_READ`: Looks in the global array of buffers for the index provided and prints out `secure_buffer.size` bytes.
+- `KEBAB_IOCTL_SET_KEY`: Small function to set the global variable `RC4_key` (the key used for the RC4 encryption). After setting the key, fills the `struct key_info` with the current PID, the size of the key and a pointer to the ``task_struct current`` (important kernel address leak).
+
+The value of each parameter is defined at the top of the file
+
+```c
+#define KEBAB_IOCTL_NEW       0xFABADA
+#define KEBAB_IOCTL_READ      0xBEBE
+#define KEBAB_IOCTL_SET_KEY   0x1CAFE
+```
