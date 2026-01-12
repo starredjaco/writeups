@@ -78,7 +78,71 @@ Keep in mind that when doing this checks the verifier **does not know** the actu
 After passing this checks, there is another security measure called **ALU Sanitation**, this will patch the actual eBPF bytecode being executed to check if the state of the verifier matches with the actual state in runtime.
 
 #### Interacting with userland
-eBPF implements a data type called `bpf_map`, by creating a map you can pass values to your eBPF bytecode and it can get accessed by the kernel safely. The map has a fixed size, and that is the max bounds check the verifier is doing `map_size`. There are a lot of map types, but the most relevant for this challenge are `BPF_MAP_TYPE_ARRAY` and `BPF_MAP_TYPE_ARRAY_OF_MAPS`. The first one is a standard array, we will create a map with this type setting a `key_size`, for example 4 bytes as an integer for the index of the array, and `value_size`. As well as `max_entries` of the array.
+eBPF implements a data type called `bpf_map`, by creating a map you can pass values to your eBPF bytecode and it can get accessed by the kernel safely. The map has a fixed size, and that is the max bounds check the verifier is doing `map_size`. There are a lot of map types, but the most relevant for this challenge are `BPF_MAP_TYPE_ARRAY` and `BPF_MAP_TYPE_ARRAY_OF_MAPS`. The first one is a standard array, we will create a map with this type setting a `key_size`, for example 4 bytes as an integer for the index of the array, and `value_size`. As well as the `max_entries` of the structure. Every operation on the map will be executed by the syscall `bpf`, that will accept as the first parameter a specific `cmd` such as `BPF_MAP_UPDATE_ELEM` to update the array, `BPF_MAP_LOOKUP_ELEM`, to read from it, etc.
 
 I will not dive too much into eBPF internals in this writeup, you can get more information about it in the blog I mentioned before, [this one](https://www.zerodayinitiative.com/blog/2020/4/8/cve-2020-8835-linux-kernel-privilege-escalation-via-improper-ebpf-program-verification), or in the [official documentation](https://docs.ebpf.io/).
 
+### Back to the challenge
+
+Analyzing the patch we see that ALU Sanitation is **completely disabled** so that takes out a big security measure. The other modification is a bit more complex, it is modifying the implementation of the left, right and signed right shifts.
+
+The full function being modified is :
+
+```c
+static bool is_safe_to_compute_dst_reg_range(struct bpf_insn *insn,
+					     const struct bpf_reg_state *src_reg)
+{
+	bool src_is_const = false;
+	u64 insn_bitness = (BPF_CLASS(insn->code) == BPF_ALU64) ? 64 : 32;
+
+	if (insn_bitness == 32) {
+		if (tnum_subreg_is_const(src_reg->var_off)
+		    && src_reg->s32_min_value == src_reg->s32_max_value
+		    && src_reg->u32_min_value == src_reg->u32_max_value)
+			src_is_const = true;
+	} else {
+		if (tnum_is_const(src_reg->var_off)
+		    && src_reg->smin_value == src_reg->smax_value
+		    && src_reg->umin_value == src_reg->umax_value)
+			src_is_const = true;
+	}
+
+	switch (BPF_OP(insn->code)) {
+	case BPF_ADD:
+	case BPF_SUB:
+	case BPF_NEG:
+	case BPF_AND:
+	case BPF_XOR:
+	case BPF_OR:
+	case BPF_MUL:
+		return true;
+
+	/* Shift operators range is only computable if shift dimension operand
+	 * is a constant. Shifts greater than 31 or 63 are undefined. This
+	 * includes shifts by a negative number.
+	 */
+	case BPF_LSH:
+	case BPF_RSH:
+	case BPF_ARSH:
+		return (src_is_const && src_reg->umax_value < insn_bitness);
+	default:
+		return false;
+	}
+}
+```
+
+It sets `src_is_const` if the value of the register being shifted is _constant_, this means, its minimum range is equal to its maximum range. Only if the value is constant it will execute the shift, this check is really important because in the actual LSH implementation we can see that it will use the `umin_value` to do the shifting:
+
+```c
+static void scalar_min_max_lsh(struct bpf_reg_state *dst_reg,
+			       struct bpf_reg_state *src_reg)
+{
+...
+	dst_reg->var_off = tnum_lshift(dst_reg->var_off, umin_val);
+...
+}
+```
+
+In our patch, the line `return (src_is_const && src_reg->umax_value < insn_bitness);` is changed to `return (src_reg->umax_value < insn_bitness);`, removing completely the constant value check. This creates a big vulnerability in the eBPF verifier, because this means that the shift will be **always** executed with the minimum value, even when there is a different maximum value. So if we somehow create a situation where ``R1 = 0`` and the verifier thinks ``R1 = (0, 1)`` he will execute the left shift with 0, but in runtime the shift will be executed with 1. `R1 << 0 (in the verifier)` vs `R1 << 1 (runtime)`. This vulnerability as we can see, will let us achieve LPE in the remote instance.
+
+### Exploitation
