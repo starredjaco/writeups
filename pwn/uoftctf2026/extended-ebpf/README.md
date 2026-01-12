@@ -226,7 +226,7 @@ Now we have a kernel address from userland, and we can calculate KASLR base with
 
 ### Arbitrary write
 
-I spent a lot of the time looking for a way to achieve arbitrary write, and I could manage to make it work until I faced [this blog](https://stdnoerr.blog/blog/eBPF-exploitation-D3CTF-d3bpf).
+I spent a lot of the time looking for a way to achieve arbitrary write, and I could not manage to make it work until I faced [this blog](https://stdnoerr.blog/blog/eBPF-exploitation-D3CTF-d3bpf).
 
 The strategy to achieve this arbitrary write relied on the type `BPF_MAP_TYPE_ARRAY_OF_MAPS`. As I said before, each type has its own `ops`, with different functionality depending on the type. `BPF_MAP_TYPE_ARRAY_OF_MAPS` is a map type that stores pointers to other maps and there is something really important in the implementation of the `lookup` function for this type: when we execute a lookup on this kind of object, the return value is not the start of the array, in `BPF_MAP_TYPE_ARRAY` where they return to us the pointer to the first element `&map_array[0]` and we can load and store with `STX` and `LDX`. In the array of maps type, the return value is actually the ``*map_array[0]``, this means that if we have an address in the first element, the lookup will give us the address as a valid pointer we can read or write to.
 
