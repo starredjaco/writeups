@@ -143,6 +143,51 @@ static void scalar_min_max_lsh(struct bpf_reg_state *dst_reg,
 }
 ```
 
-In our patch, the line `return (src_is_const && src_reg->umax_value < insn_bitness);` is changed to `return (src_reg->umax_value < insn_bitness);`, removing completely the constant value check. This creates a big vulnerability in the eBPF verifier, because this means that the shift will be **always** executed with the minimum value, even when there is a different maximum value. So if we somehow create a situation where ``R1 = 0`` and the verifier thinks ``R1 = (0, 1)`` he will execute the left shift with 0, but in runtime the shift will be executed with 1. `R1 << 0 (in the verifier)` vs `R1 << 1 (runtime)`. This vulnerability as we can see, will let us achieve LPE in the remote instance.
+In our patch, the line `return (src_is_const && src_reg->umax_value < insn_bitness);` is changed to `return (src_reg->umax_value < insn_bitness);`, removing completely the constant value check. This creates a big vulnerability in the eBPF verifier, because this means that the shift will be **always** executed with the minimum value, even when there is a different maximum value. So if we somehow create a situation where ``R1 = 1`` and the verifier thinks ``R1 = (0, 1)`` he will execute the left shift with 0, but in reality the shift will be executed with 1. `R1 << 0 (in the verifier)` vs `R1 << 1 (runtime)`.
 
 ### Exploitation
+
+I will not explain here all the eBPF setup in C, but we created some helper functions that using the `bpf` syscall can interact with the maps (create, update and lookup). Also, there is a [bpf.h](assets/bpf.h) file where we have all this functions, along with the actual eBPF bytecode instruction definitions. I took these from [here](https://github.com/chompie1337/Linux_LPE_eBPF_CVE-2021-3490/blob/main/include/bpf_defs.h).
+
+The first thing we will do is create a map and update it to set its first value to `1`, this will be our shift value. Because we load it from the map, the verifier does not know its real value, so he sets a range (umin, umax).
+
+```c
+/* int create_map(int map_type, uint32_t key_size, uint64_t value_size, uint32_t max_entr, int inner_map_fd) */
+int map_fd = create_map(BPF_MAP_TYPE_ARRAY, 0x4, 0x8, 0x3, 0); /* uint64_t map_array[3] */
+uint64_t shift = 1;
+update_map(map_fd, 0, &shift, BPF_ANY); /* map_array[0] = shift */
+```
+
+Then in our bytecode we will retrieve this value, and using a JMP instruction, we will set the verifier's state to `SHIFT = (0, 1)`
+
+```c
+BPF_JMP_IMM(BPF_JGE, SHIFT, 2, 19) /* if (SHIFT > 2); pc += 19; 
+```
+
+Because the branch is not taken (because `SHIFT = 1`), the verifier will now update the range to (0, 1), because those are the unsigned values below 2. Now we just have to execute the left shift with a register that holds 1.
+
+```c
+...
+BPF_MOV64_IMM(VULN, 1),
+BPF_ALU64_REG(BPF_LSH, VULN, SHIFT), // 1 << (0, 1)
+BPF_ALU64_IMM(BPF_SUB, VULN, 1),
+...
+
+```
+
+**What the verifier thinks happened**:
+
+I.      VULN = 1
+II.     1 << 0 = 1
+III.    1 - 1 = 0
+
+        VULN == 0
+**What happens in runtime**:
+
+I.      VULN = 1
+II.     1 << 1 = 2
+III     1 - 1 = 0
+
+        VULN == 1
+
+This is critical, because now we can do **pointer+scalar** MUL operations bypassing every verifier restriction. If we now multiply  `0x1337 * VULN`, the verifier will think the result is 0 and that is safe to add to a pointer, but in reality we will be adding 0x1337 into it.
